@@ -6,6 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+pnpm-lock.yaml
 
 node_modules
 dist
@@ -26,3 +27,7 @@ stats.html
 *.sln
 *.sw?
 .vscode
+folder-alias.json
+
+.eslintcache
+/.eslintcache

@@ -1,53 +1,34 @@
 <template>
     <div>
         <LayoutContent v-loading="loading" :title="$t('logs.login')">
-            <template #toolbar>
-                <el-row>
-                    <el-col :span="16">
-                        <el-button type="primary" plain @click="onClean()">
-                            {{ $t('logs.deleteLogs') }}
-                        </el-button>
-                    </el-col>
-                    <el-col :span="8">
-                        <TableSetting @search="search()" />
-                        <div class="search-button">
-                            <el-input
-                                v-model="searchIP"
-                                clearable
-                                @clear="search()"
-                                suffix-icon="Search"
-                                @keyup.enter="search()"
-                                @blur="search()"
-                                :placeholder="$t('commons.button.search') + ' ip'"
-                            ></el-input>
-                        </div>
-                    </el-col>
-                </el-row>
-            </template>
-
             <template #search>
-                <el-select v-model="searchStatus" @change="search()" clearable>
+                <LogRouter current="LoginLog" />
+            </template>
+            <template #leftToolBar>
+                <el-button v-permission type="primary" plain @click="onClean()">
+                    {{ $t('logs.deleteLogs') }}
+                </el-button>
+            </template>
+            <template #rightToolBar>
+                <el-select v-model="searchStatus" @change="search()" clearable class="p-w-200">
                     <template #prefix>{{ $t('commons.table.status') }}</template>
                     <el-option :label="$t('commons.table.all')" value=""></el-option>
                     <el-option :label="$t('commons.status.success')" value="Success"></el-option>
                     <el-option :label="$t('commons.status.failed')" value="Failed"></el-option>
                 </el-select>
+                <TableSearch @search="search()" v-model:searchName="searchInfo" />
+                <TableRefresh @search="search()" />
+                <TableSetting title="login-log-refresh" @search="search()" />
             </template>
             <template #main>
-                <ComplexTable :pagination-config="paginationConfig" :data="data" @search="search">
-                    <el-table-column min-width="40" :label="$t('logs.loginIP')" prop="ip" />
-                    <el-table-column min-width="40" :label="$t('logs.loginAddress')" prop="address" />
+                <ComplexTable :pagination-config="paginationConfig" :data="data" @search="search" :heightDiff="370">
+                    <el-table-column :label="$t('logs.loginIP')" prop="ip" />
+                    <el-table-column v-if="isEnterprise" :label="$t('commons.login.username')" prop="user" />
+                    <el-table-column :label="$t('logs.loginAddress')" prop="address" />
                     <el-table-column :label="$t('logs.loginAgent')" show-overflow-tooltip prop="agent" />
-                    <el-table-column min-width="40" :label="$t('logs.loginStatus')" prop="status">
+                    <el-table-column :label="$t('logs.loginStatus')" prop="status">
                         <template #default="{ row }">
-                            <div v-if="row.status === 'Success'">
-                                <el-tag type="success">{{ $t('commons.status.success') }}</el-tag>
-                            </div>
-                            <div v-else>
-                                <el-tooltip class="box-item" effect="dark" :content="row.message" placement="top-start">
-                                    <el-tag type="danger">{{ $t('commons.status.failed') }}</el-tag>
-                                </el-tooltip>
-                            </div>
+                            <Status :status="row.status" :msg="loadMsg(row.message)" />
                         </template>
                     </el-table-column>
                     <el-table-column
@@ -64,30 +45,32 @@
 </template>
 
 <script setup lang="ts">
-import ComplexTable from '@/components/complex-table/index.vue';
-import TableSetting from '@/components/table-setting/index.vue';
 import ConfirmDialog from '@/components/confirm-dialog/index.vue';
-import LayoutContent from '@/layout/layout-content.vue';
-import { dateFormat } from '@/utils/util';
+import LogRouter from '@/views/log/router/index.vue';
+import { dateFormat } from '@/utils/date';
 import { cleanLogs, getLoginLogs } from '@/api/modules/log';
-import { onMounted, reactive, ref } from '@vue/runtime-core';
+import { onMounted, reactive, ref } from 'vue';
 import i18n from '@/lang';
 import { MsgSuccess } from '@/utils/message';
+import { useGlobalStore } from '@/composables/useGlobalStore';
+
+const { isEnterprise } = useGlobalStore();
 
 const loading = ref();
 const data = ref();
 const confirmDialogRef = ref();
 const paginationConfig = reactive({
+    cacheSizeKey: 'login-log-page-size',
     currentPage: 1,
-    pageSize: 10,
+    pageSize: Number(localStorage.getItem('login-log-page-size')) || 20,
     total: 0,
 });
-const searchIP = ref<string>('');
+const searchInfo = ref<string>('');
 const searchStatus = ref<string>('');
 
 const search = async () => {
     let params = {
-        ip: searchIP.value,
+        info: searchInfo.value,
         status: searchStatus.value,
         page: paginationConfig.currentPage,
         pageSize: paginationConfig.pageSize,
@@ -113,6 +96,16 @@ const onClean = async () => {
     confirmDialogRef.value!.acceptParams(params);
 };
 
+const loadMsg = (msg: string) => {
+    if (msg === 'ErrAuth') {
+        return i18n.global.t('commons.login.errorAuthInfo');
+    }
+    if (msg === 'ErrMFA') {
+        return i18n.global.t('commons.login.errorMfaInfo');
+    }
+    return msg;
+};
+
 const onSubmitClean = async () => {
     await cleanLogs({ logType: 'login' });
     search();
@@ -123,13 +116,3 @@ onMounted(() => {
     search();
 });
 </script>
-
-<style scoped lang="scss">
-.pre {
-    white-space: pre-wrap;
-    white-space: -moz-pre-wrap;
-    white-space: -pre-wrap;
-    white-space: -o-pre-wrap;
-    word-wrap: break-word;
-}
-</style>

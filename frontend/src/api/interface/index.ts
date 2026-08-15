@@ -22,13 +22,21 @@ export interface SearchWithPage {
     info: string;
     page: number;
     pageSize: number;
+    excludeAppStore?: boolean;
+    orderBy?: string;
+    order?: string;
+    name?: string;
+    type?: string;
 }
 export interface CommonModel {
     id: number;
-    CreatedAt?: string;
-    UpdatedAt?: string;
+    createdAt?: string;
+    updatedAt?: string;
 }
 export interface DescriptionUpdate {
     id: number;
     description: string;
+}
+export interface UpdateByFile {
+    file: string;
 }

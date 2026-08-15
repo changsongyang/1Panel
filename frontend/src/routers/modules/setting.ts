@@ -1,21 +1,42 @@
 import { Layout } from '@/routers/constant';
+import { GlobalStore } from '@/store';
+
+const settingPermissions = ['alert_view', 'backup_view'];
+
+const redirectToAvailableSetting = () => {
+    const globalStore = GlobalStore();
+    if (globalStore.isAdmin) {
+        return '/settings/panel';
+    }
+    if (globalStore.hasPermission('alert_view')) {
+        return '/settings/alert';
+    }
+    if (globalStore.hasPermission('backup_view')) {
+        return '/settings/backupaccount';
+    }
+    return '/settings/panel';
+};
 
 const settingRouter = {
-    sort: 8,
+    sort: 12,
     path: '/settings',
+    name: 'Setting-Menu',
     component: Layout,
-    redirect: '/settings/panel',
+    redirect: redirectToAvailableSetting,
     meta: {
         title: 'menu.settings',
         icon: 'p-config',
+        permission: settingPermissions,
     },
     children: [
         {
             path: '/settings',
             name: 'Setting',
-            redirect: '/settings/panel',
+            redirect: redirectToAvailableSetting,
             component: () => import('@/views/setting/index.vue'),
-            meta: {},
+            meta: {
+                permission: settingPermissions,
+            },
             children: [
                 {
                     path: 'panel',
@@ -23,8 +44,22 @@ const settingRouter = {
                     component: () => import('@/views/setting/panel/index.vue'),
                     hidden: true,
                     meta: {
-                        requiresAuth: true,
-                        activeMenu: 'Setting',
+                        parent: 'menu.settings',
+                        title: 'setting.panel',
+                        activeMenu: '/settings',
+                        adminOnly: true,
+                    },
+                },
+                {
+                    path: 'alert',
+                    name: 'Alert',
+                    component: () => import('@/views/setting/alert/index.vue'),
+                    hidden: true,
+                    meta: {
+                        parent: 'menu.settings',
+                        title: 'xpack.alert.alertNotice',
+                        activeMenu: '/settings',
+                        permission: 'alert_view',
                     },
                 },
                 {
@@ -33,8 +68,22 @@ const settingRouter = {
                     component: () => import('@/views/setting/backup-account/index.vue'),
                     hidden: true,
                     meta: {
-                        requiresAuth: true,
-                        activeMenu: 'Setting',
+                        parent: 'menu.settings',
+                        title: 'setting.backupAccount',
+                        activeMenu: '/settings',
+                        permission: 'backup_view',
+                    },
+                },
+                {
+                    path: 'license',
+                    name: 'License',
+                    component: () => import('@/views/setting/license/index.vue'),
+                    hidden: true,
+                    meta: {
+                        parent: 'menu.settings',
+                        title: 'setting.license',
+                        activeMenu: '/settings',
+                        adminOnly: true,
                     },
                 },
                 {
@@ -43,18 +92,10 @@ const settingRouter = {
                     component: () => import('@/views/setting/about/index.vue'),
                     hidden: true,
                     meta: {
-                        requiresAuth: true,
-                        activeMenu: 'Setting',
-                    },
-                },
-                {
-                    path: 'monitor',
-                    name: 'Monitor',
-                    component: () => import('@/views/setting/monitor/index.vue'),
-                    hidden: true,
-                    meta: {
-                        requiresAuth: true,
-                        activeMenu: 'Setting',
+                        parent: 'menu.settings',
+                        title: 'setting.about',
+                        activeMenu: '/settings',
+                        adminOnly: true,
                     },
                 },
                 {
@@ -63,8 +104,10 @@ const settingRouter = {
                     component: () => import('@/views/setting/safe/index.vue'),
                     hidden: true,
                     meta: {
-                        requiresAuth: true,
-                        activeMenu: 'Setting',
+                        parent: 'menu.settings',
+                        title: 'setting.safe',
+                        activeMenu: '/settings',
+                        adminOnly: true,
                     },
                 },
                 {
@@ -73,8 +116,10 @@ const settingRouter = {
                     hidden: true,
                     component: () => import('@/views/setting/snapshot/index.vue'),
                     meta: {
-                        requiresAuth: true,
-                        activeMenu: 'Setting',
+                        parent: 'menu.settings',
+                        title: 'setting.snapshot',
+                        activeMenu: '/settings',
+                        adminOnly: true,
                     },
                 },
                 {
@@ -83,8 +128,8 @@ const settingRouter = {
                     hidden: true,
                     component: () => import('@/views/setting/expired.vue'),
                     meta: {
-                        requiresAuth: true,
-                        activeMenu: 'Expired',
+                        activeMenu: '/settings',
+                        ignoreTab: true,
                     },
                 },
             ],

@@ -1,98 +1,226 @@
 import http from '@/api';
-import { ResPage } from '../interface';
-import { Command } from '../interface/command';
+import { ResPage, ReqPage } from '../interface';
 import { Host } from '../interface/host';
-import { Base64 } from 'js-base64';
-import { deepCopy } from '@/utils/util';
-
-export const searchHosts = (params: Host.SearchWithPage) => {
-    return http.post<ResPage<Host.Host>>(`/hosts/search`, params);
-};
-export const getHostTree = (params: Host.ReqSearch) => {
-    return http.post<Array<Host.HostTree>>(`/hosts/tree`, params);
-};
-export const getHostInfo = (id: number) => {
-    return http.get<Host.Host>(`/hosts/` + id);
-};
-export const addHost = (params: Host.HostOperate) => {
-    let reqest = deepCopy(params) as Host.HostOperate;
-    if (reqest.password) {
-        reqest.password = Base64.encode(reqest.password);
-    }
-    if (reqest.privateKey) {
-        reqest.privateKey = Base64.encode(reqest.privateKey);
-    }
-    return http.post<Host.HostOperate>(`/hosts`, reqest);
-};
-export const testByInfo = (params: Host.HostConnTest) => {
-    let reqest = deepCopy(params) as Host.HostOperate;
-    if (reqest.password) {
-        reqest.password = Base64.encode(reqest.password);
-    }
-    if (reqest.privateKey) {
-        reqest.privateKey = Base64.encode(reqest.privateKey);
-    }
-    return http.post<boolean>(`/hosts/test/byinfo`, reqest);
-};
-export const testByID = (id: number) => {
-    return http.post<boolean>(`/hosts/test/byid/${id}`);
-};
-export const editHost = (params: Host.HostOperate) => {
-    let reqest = deepCopy(params) as Host.HostOperate;
-    if (reqest.password) {
-        reqest.password = Base64.encode(reqest.password);
-    }
-    if (reqest.privateKey) {
-        reqest.privateKey = Base64.encode(reqest.privateKey);
-    }
-    return http.post(`/hosts/update`, reqest);
-};
-export const editHostGroup = (params: Host.GroupChange) => {
-    return http.post(`/hosts/update/group`, params);
-};
-export const deleteHost = (params: { ids: number[] }) => {
-    return http.post(`/hosts/del`, params);
-};
-
-// command
-export const getCommandList = () => {
-    return http.get<Array<Command.CommandInfo>>(`/hosts/command`, {});
-};
-export const getCommandPage = (params: Command.CommandSearch) => {
-    return http.post<ResPage<Command.CommandInfo>>(`/hosts/command/search`, params);
-};
-export const addCommand = (params: Command.CommandOperate) => {
-    return http.post<Command.CommandOperate>(`/hosts/command`, params);
-};
-export const editCommand = (params: Command.CommandOperate) => {
-    return http.post(`/hosts/command/update`, params);
-};
-export const deleteCommand = (params: { ids: number[] }) => {
-    return http.post(`/hosts/command/del`, params);
-};
+import { TimeoutEnum } from '@/enums/http-enum';
+import { deepCopy } from '@/utils/misc';
+import { encodeBase64Fields } from '@/utils/base64';
 
 // firewall
-export const loadFireBaseInfo = () => {
-    return http.get<Host.FirewallBase>(`/hosts/firewall/base`);
+export const loadFireBaseInfo = (tab: string) => {
+    return http.post<Host.FirewallBase>(`/hosts/firewall/base`, { name: tab }, TimeoutEnum.T_40S);
 };
 export const searchFireRule = (params: Host.RuleSearch) => {
-    return http.post<ResPage<Host.RuleInfo>>(`/hosts/firewall/search`, params);
+    return http.post<ResPage<Host.RuleInfo>>(`/hosts/firewall/search`, params, TimeoutEnum.T_40S);
 };
-export const operateFire = (operation: string) => {
-    return http.post(`/hosts/firewall/operate`, { operation: operation });
+export const operateFire = (operation: string, withDockerRestart: boolean) => {
+    return http.post(
+        `/hosts/firewall/operate`,
+        {
+            operation: operation,
+            withDockerRestart: withDockerRestart,
+        },
+        TimeoutEnum.T_60S,
+    );
 };
 export const operatePortRule = (params: Host.RulePort) => {
-    return http.post<Host.RulePort>(`/hosts/firewall/port`, params);
+    return http.post<Host.RulePort>(`/hosts/firewall/port`, params, TimeoutEnum.T_40S);
+};
+export const operateForwardRule = (params: { rules: Host.RuleForward[]; forceDelete?: boolean }) => {
+    return http.post<Host.RulePort>(`/hosts/firewall/forward`, params, TimeoutEnum.T_40S);
 };
 export const operateIPRule = (params: Host.RuleIP) => {
-    return http.post<Host.RuleIP>(`/hosts/firewall/ip`, params);
+    return http.post<Host.RuleIP>(`/hosts/firewall/ip`, params, TimeoutEnum.T_40S);
 };
 export const updatePortRule = (params: Host.UpdatePortRule) => {
-    return http.post(`/hosts/firewall/update/port`, params);
+    return http.post(`/hosts/firewall/update/port`, params, TimeoutEnum.T_40S);
 };
 export const updateAddrRule = (params: Host.UpdateAddrRule) => {
-    return http.post(`/hosts/firewall/update/addr`, params);
+    return http.post(`/hosts/firewall/update/addr`, params, TimeoutEnum.T_40S);
+};
+export const updateFirewallDescription = (params: Host.UpdateDescription) => {
+    return http.post(`/hosts/firewall/update/description`, params);
 };
 export const batchOperateRule = (params: Host.BatchRule) => {
-    return http.post(`/hosts/firewall/batch`, params);
+    return http.post(`/hosts/firewall/batch`, params, TimeoutEnum.T_60S);
+};
+
+// Iptables Filter
+export const searchFilterRules = (params: Host.IptablesFilterRuleSearch) => {
+    return http.post<Host.IptablesData>(`/hosts/firewall/filter/rule/search`, params);
+};
+export const loadChainStatus = (name: string) => {
+    return http.post<Host.ChainStatus>(`/hosts/firewall/filter/chain/status`, { name: name }, TimeoutEnum.T_60S);
+};
+export const operateFilterRule = (params: Host.IptablesFilterRuleOp) => {
+    return http.post(`/hosts/firewall/filter/rule/operate`, params, TimeoutEnum.T_40S);
+};
+export const batchOperateFilterRule = (params: { rules: Host.IptablesFilterRuleOp[] }) => {
+    return http.post(`/hosts/firewall/filter/rule/batch`, params, TimeoutEnum.T_40S);
+};
+export const operateFilterChain = (name: string, op: string) => {
+    return http.post(`/hosts/firewall/filter/operate`, { name: name, operate: op }, TimeoutEnum.T_60S);
+};
+
+// monitors
+export const loadMonitor = (param: Host.MonitorSearch, currentNode?: string) => {
+    return http.post<Array<Host.MonitorData>>(
+        `/hosts/monitor/search`,
+        param,
+        TimeoutEnum.T_60S,
+        currentNode ? { CurrentNode: currentNode } : undefined,
+    );
+};
+export const getNetworkOptions = (currentNode?: string) => {
+    return http.get<Array<string>>(
+        `/hosts/monitor/netoptions`,
+        {},
+        currentNode ? { headers: { CurrentNode: currentNode } } : {},
+    );
+};
+export const getIOOptions = (currentNode?: string) => {
+    return http.get<Array<string>>(
+        `/hosts/monitor/iooptions`,
+        {},
+        currentNode ? { headers: { CurrentNode: currentNode } } : {},
+    );
+};
+export const cleanMonitors = () => {
+    return http.post(`/hosts/monitor/clean`, {});
+};
+export const loadMonitorSetting = (currentNode?: string) => {
+    return http.get<Host.MonitorSetting>(
+        `/hosts/monitor/setting`,
+        {},
+        currentNode ? { headers: { CurrentNode: currentNode } } : {},
+    );
+};
+export const updateMonitorSetting = (key: string, value: string) => {
+    return http.post(`/hosts/monitor/setting/update`, { key: key, value: value });
+};
+export const loadRuntimeDiagnosticsSummary = (currentNode?: string) => {
+    return http.get<Host.RuntimeDiagnosticsSummary>(
+        `/hosts/diagnostics/summary`,
+        {},
+        currentNode ? { headers: { CurrentNode: currentNode } } : {},
+    );
+};
+export const loadRuntimeGoroutines = (currentNode?: string) => {
+    return http.get<Host.RuntimeGoroutineSnapshot>(
+        `/hosts/diagnostics/goroutines`,
+        {},
+        currentNode ? { headers: { CurrentNode: currentNode } } : {},
+    );
+};
+export class RuntimeProfileDownloadError extends Error {
+    constructor(message = '') {
+        super(message);
+        this.name = 'RuntimeProfileDownloadError';
+    }
+}
+const parseRuntimeProfileError = async (data: unknown) => {
+    if (!(data instanceof Blob) || !data.type.includes('application/json')) {
+        return;
+    }
+    try {
+        const response = JSON.parse(await data.text()) as { message?: string };
+        return new RuntimeProfileDownloadError(response.message);
+    } catch {
+        return new RuntimeProfileDownloadError();
+    }
+};
+export const createRuntimeProfile = async (params: Host.RuntimeProfileCreate, currentNode?: string) => {
+    try {
+        const data = await http.download<Blob>(`/hosts/diagnostics/profiles`, params, {
+            responseType: 'blob',
+            timeout: TimeoutEnum.T_60S,
+            headers: currentNode ? { CurrentNode: currentNode } : undefined,
+        });
+        const profileError = await parseRuntimeProfileError(data);
+        if (profileError) {
+            throw profileError;
+        }
+        return data;
+    } catch (error) {
+        if (error instanceof RuntimeProfileDownloadError) {
+            throw error;
+        }
+        const responseData = (error as { response?: { data?: unknown } })?.response?.data;
+        const profileError = await parseRuntimeProfileError(responseData);
+        throw profileError || error;
+    }
+};
+// ssh
+export const getSSHInfo = (currentNode?: string) => {
+    return http.post<Host.SSHInfo>(
+        `/hosts/ssh/search`,
+        {},
+        undefined,
+        currentNode ? { CurrentNode: currentNode } : undefined,
+    );
+};
+export const operateSSH = (operation: string) => {
+    return http.post(`/hosts/ssh/operate`, { operation: operation }, TimeoutEnum.T_40S);
+};
+export const updateSSH = (params: Host.SSHUpdate) => {
+    return http.post(`/hosts/ssh/update`, params, TimeoutEnum.T_40S);
+};
+export const loadSSHFile = (name: string) => {
+    return http.post<string>(`/hosts/ssh/file`, { name: name });
+};
+export const updateSSHByFile = (key: string, value: string, path = '') => {
+    return http.post(`/hosts/ssh/file/update`, { key, path, value }, TimeoutEnum.T_60S);
+};
+export const createCert = (params: Host.RootCert) => {
+    let request = deepCopy(params) as Host.RootCert;
+    encodeBase64Fields(request, ['passPhrase', 'privateKey', 'publicKey']);
+    return http.post(`/hosts/ssh/cert`, request);
+};
+export const editCert = (params: Host.RootCert) => {
+    let request = deepCopy(params) as Host.RootCert;
+    encodeBase64Fields(request, ['passPhrase', 'privateKey', 'publicKey']);
+    return http.post(`/hosts/ssh/cert/update`, request);
+};
+export const searchCert = (params: ReqPage) => {
+    return http.post<ResPage<Host.RootCertInfo>>(`/hosts/ssh/cert/search`, params);
+};
+export const deleteCert = (ids: Array<number>, forceDelete: boolean) => {
+    return http.post(`/hosts/ssh/cert/delete`, { ids: ids, forceDelete: forceDelete });
+};
+export const syncCert = () => {
+    return http.post(`/hosts/ssh/cert/sync`);
+};
+export const loadSSHLogs = (params: Host.searchSSHLog, currentNode?: string) => {
+    return http.post<ResPage<Host.sshHistory>>(
+        `/hosts/ssh/log`,
+        params,
+        undefined,
+        currentNode ? { CurrentNode: currentNode } : undefined,
+    );
+};
+export const exportSSHLogs = (params: Host.searchSSHLog) => {
+    return http.post<string>(`/hosts/ssh/log/export`, params, TimeoutEnum.T_40S);
+};
+export const cleanSSHLogs = () => {
+    return http.post(`/hosts/ssh/log/clean`, {});
+};
+
+export const listDisks = () => {
+    return http.get<Host.CompleteDiskInfo>(`/hosts/disks`);
+};
+
+export const partitionDisk = (params: Host.DiskPartition) => {
+    return http.post(`/hosts/disks/partition`, params, TimeoutEnum.T_60S);
+};
+
+export const mountDisk = (params: Host.DiskMount) => {
+    return http.post(`/hosts/disks/mount`, params, TimeoutEnum.T_60S);
+};
+
+export const unmountDisk = (params: Host.DiskUmount) => {
+    return http.post(`/hosts/disks/unmount`, params, TimeoutEnum.T_60S);
+};
+
+export const getComponentInfo = (name: string, operateNode?: string) => {
+    const params = operateNode ? `?operateNode=${operateNode}` : '';
+    return http.get<Host.ComponentInfo>(`/hosts/components/${name}${params}`);
 };

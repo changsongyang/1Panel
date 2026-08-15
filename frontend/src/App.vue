@@ -1,33 +1,53 @@
 <template>
     <el-config-provider :locale="i18nLocale" :button="config" size="default">
-        <router-view v-if="isRouterAlive"></router-view>
+        <router-view v-if="isRouterAlive" />
     </el-config-provider>
 </template>
 
 <script setup lang="ts">
 import { reactive, computed, ref, nextTick, provide } from 'vue';
-import { GlobalStore } from '@/store';
+import { useGlobalStore } from '@/composables/useGlobalStore';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
+import zhTw from 'element-plus/es/locale/lang/zh-tw';
 import en from 'element-plus/es/locale/lang/en';
-import { useTheme } from '@/hooks/use-theme';
+import ja from 'element-plus/es/locale/lang/ja';
+import ms from 'element-plus/es/locale/lang/ms';
+import ptBR from 'element-plus/es/locale/lang/pt-br';
+import ru from 'element-plus/es/locale/lang/ru';
+import ko from 'element-plus/es/locale/lang/ko';
+import tr from 'element-plus/es/locale/lang/tr';
+import esES from 'element-plus/es/locale/lang/es';
+import fa from 'element-plus/es/locale/lang/fa';
+import lo from 'element-plus/es/locale/lang/lo';
+import { useTheme } from '@/global/use-theme';
 useTheme();
 
-const globalStore = GlobalStore();
+const { language } = useGlobalStore();
 const config = reactive({
     autoInsertSpace: false,
 });
 
-const i18nLocale = computed((): any => {
-    if (globalStore.language && globalStore.language == 'zh') return zhCn;
-    if (globalStore.language == 'en') return en;
-    return '';
+const i18nLocale = computed(() => {
+    if (language.value === 'zh') return zhCn;
+    if (language.value === 'zh-Hant') return zhTw;
+    if (language.value === 'en') return en;
+    if (language.value === 'ja') return ja;
+    if (language.value === 'ms') return ms;
+    if (language.value === 'ru') return ru;
+    if (language.value === 'pt-BR') return ptBR;
+    if (language.value === 'ko') return ko;
+    if (language.value === 'tr') return tr;
+    if (language.value === 'es-ES') return esES;
+    if (language.value === 'fa') return fa;
+    if (language.value === 'lo') return lo;
+    return zhCn;
 });
 
-let isRouterAlive = ref(true);
+const isRouterAlive = ref(true);
 
 const reload = () => {
     isRouterAlive.value = false;
-    nextTick(function () {
+    nextTick(() => {
         isRouterAlive.value = true;
     });
 };

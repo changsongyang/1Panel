@@ -21,7 +21,7 @@
 </template>
 <script lang="ts" setup>
 import Status from '@/components/status/index.vue';
-import { dateFormatSimple } from '@/utils/util';
+import { dateFormatSimple } from '@/utils/date';
 const props = defineProps({
     primaryDomain: {
         type: String,
@@ -39,8 +39,8 @@ const props = defineProps({
 
 const isEver = (time: string) => {
     const expireDate = new Date(time);
-    return expireDate < new Date('1970-01-02');
+    return expireDate > new Date('9999-12-30');
 };
 </script>
 
-<style lang="scss"></style>
+<style lang="scss" scoped></style>

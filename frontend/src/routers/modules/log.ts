@@ -1,13 +1,15 @@
 import { Layout } from '@/routers/constant';
 
 const logsRouter = {
-    sort: 7,
+    sort: 11,
     path: '/logs',
+    name: 'Log-Menu',
     component: Layout,
     redirect: '/logs/operation',
     meta: {
         title: 'menu.logs',
         icon: 'p-log',
+        permission: 'log_view',
     },
     children: [
         {
@@ -23,8 +25,10 @@ const logsRouter = {
                     component: () => import('@/views/log/operation/index.vue'),
                     hidden: true,
                     meta: {
+                        parent: 'menu.logs',
+                        title: 'logs.operation',
                         activeMenu: '/logs',
-                        requiresAuth: false,
+                        permission: 'log_view',
                     },
                 },
                 {
@@ -33,8 +37,22 @@ const logsRouter = {
                     component: () => import('@/views/log/login/index.vue'),
                     hidden: true,
                     meta: {
+                        parent: 'menu.logs',
+                        title: 'logs.login',
                         activeMenu: '/logs',
-                        requiresAuth: false,
+                        permission: 'log_view',
+                    },
+                },
+                {
+                    path: 'website',
+                    name: 'WebsiteLog',
+                    component: () => import('@/views/log/website/index.vue'),
+                    hidden: true,
+                    meta: {
+                        parent: 'menu.logs',
+                        title: 'logs.websiteLog',
+                        activeMenu: '/logs',
+                        permission: 'log_view',
                     },
                 },
                 {
@@ -43,8 +61,46 @@ const logsRouter = {
                     component: () => import('@/views/log/system/index.vue'),
                     hidden: true,
                     meta: {
+                        parent: 'menu.logs',
+                        title: 'logs.system',
                         activeMenu: '/logs',
-                        requiresAuth: false,
+                        permission: 'log_view',
+                    },
+                },
+                {
+                    path: 'host',
+                    name: 'HostSystemLog',
+                    component: () => import('@/views/log/host-system/index.vue'),
+                    hidden: true,
+                    meta: {
+                        parent: 'menu.logs',
+                        title: 'logs.hostSystem',
+                        activeMenu: '/logs',
+                        permission: 'log_view',
+                    },
+                },
+                {
+                    path: 'ssh',
+                    name: 'SSHLog2',
+                    component: () => import('@/views/host/ssh/log/log.vue'),
+                    hidden: true,
+                    meta: {
+                        parent: 'menu.logs',
+                        title: 'ssh.loginLogs',
+                        activeMenu: '/logs',
+                        permission: 'log_view',
+                    },
+                },
+                {
+                    path: 'task',
+                    name: 'Task',
+                    component: () => import('@/views/log/task/index.vue'),
+                    hidden: true,
+                    meta: {
+                        parent: 'menu.logs',
+                        title: 'logs.task',
+                        activeMenu: '/logs',
+                        permission: 'log_view',
                     },
                 },
             ],

@@ -3,12 +3,12 @@
         <RouterButton
             :buttons="[
                 {
-                    label: i18n.global.t('website.website'),
+                    label: i18n.global.t('menu.website', 2),
                     path: '/websites',
                 },
             ]"
         />
-        <LayoutContent :title="$t('website.website')" v-loading="loading">
+        <LayoutContent :title="$t('menu.website', 2)" v-loading="loading">
             <template #app>
                 <AppStatus
                     :app-key="'openresty'"
@@ -16,110 +16,212 @@
                     v-model:mask-show="maskShow"
                     v-model:loading="loading"
                     @is-exist="checkExist"
+                    ref="appStatusRef"
                 ></AppStatus>
             </template>
-            <template v-if="nginxIsExist && !openNginxConfig" #toolbar>
-                <el-row :class="{ mask: nginxStatus != 'Running' }">
-                    <el-col :span="20">
-                        <el-button type="primary" @click="openCreate">
-                            {{ $t('website.create') }}
-                        </el-button>
-                        <el-button type="primary" plain @click="openGroup">
-                            {{ $t('website.group') }}
-                        </el-button>
-                        <el-button type="primary" plain @click="openDefault">
-                            {{ $t('website.defaultServer') }}
-                        </el-button>
-                    </el-col>
-                    <el-col :span="4">
-                        <div class="search-button">
-                            <el-input
-                                v-model="req.name"
-                                clearable
-                                @clear="search()"
-                                suffix-icon="Search"
-                                @keyup.enter="search()"
-                                @blur="search()"
-                                :placeholder="$t('commons.button.search')"
-                            ></el-input>
-                        </div>
-                    </el-col>
-                </el-row>
+            <template v-if="!openNginxConfig" #leftToolBar>
+                <el-button v-permission type="primary" @click="openCreate" :disabled="disabledConfig">
+                    {{ $t('commons.button.create') }}
+                </el-button>
+                <el-button v-permission type="primary" plain @click="openGroup" :disabled="disabledConfig">
+                    {{ $t('commons.table.group') }}
+                </el-button>
+                <el-button v-permission type="primary" plain @click="openDefault" :disabled="disabledConfig">
+                    {{ $t('website.advancedSettings') }}
+                </el-button>
             </template>
-            <template v-if="nginxIsExist && !openNginxConfig" #search>
-                <div :class="{ mask: nginxStatus != 'Running' }">
-                    <el-select v-model="req.websiteGroupId" @change="search()">
-                        <template #prefix>{{ $t('website.group') }}</template>
-                        <el-option :label="$t('commons.table.all')" :value="0"></el-option>
+            <template v-if="!openNginxConfig" #rightToolBar>
+                <TableViewSwitch v-model="viewMode" storage-key="website" />
+                <el-select class="p-w-200" v-model="req.type" @change="search()" :disabled="disabledConfig">
+                    <template #prefix>{{ $t('commons.table.type') }}</template>
+                    <el-option :label="$t('commons.table.all')" :value="''"></el-option>
+                    <el-option
+                        v-for="item in WebsiteTypes"
+                        :label="item.label"
+                        :value="item.value"
+                        :key="item.value"
+                    ></el-option>
+                </el-select>
+                <el-select v-model="req.websiteGroupId" @change="search()" class="p-w-200" :disabled="disabledConfig">
+                    <template #prefix>{{ $t('commons.table.group') }}</template>
+                    <el-option :label="$t('commons.table.all')" :value="0"></el-option>
+                    <div v-for="item in groups" :key="item.id">
                         <el-option
-                            v-for="(group, index) in groups"
-                            :key="index"
-                            :label="group.name"
-                            :value="group.id"
-                        ></el-option>
-                    </el-select>
-                </div>
+                            v-if="item.name === 'Default'"
+                            :label="$t('commons.table.default')"
+                            :value="item.id"
+                        />
+                        <el-option v-else :label="item.name" :value="item.id" />
+                    </div>
+                </el-select>
+                <TableSearch @search="search()" v-model:searchName="req.name" :disabled="disabledConfig" />
+                <TableRefresh @search="search()" :disabled="disabledConfig" />
+                <fu-table-column-select
+                    :columns="columns"
+                    trigger="hover"
+                    :title="$t('commons.table.selectColumn')"
+                    popper-class="popper-class"
+                    :only-icon="true"
+                />
             </template>
-            <template v-if="nginxIsExist && !openNginxConfig" #main>
+            <template v-if="!openNginxConfig" #main>
                 <ComplexTable
                     :pagination-config="paginationConfig"
+                    :default-sort="tableSort.order ? tableSort : undefined"
+                    v-model:view-mode="viewMode"
                     :data="data"
+                    @sort-change="changeSort"
                     @search="search()"
-                    :class="{ mask: nginxStatus != 'Running' }"
+                    :class="{ mask: disabledConfig }"
+                    :heightDiff="310"
+                    :columns="columns"
+                    localKey="websiteColumn"
+                    v-model:selects="selects"
+                    :tooltip-options="{
+                        placement: 'bottom-start',
+                    }"
                 >
-                    <el-table-column :label="$t('commons.table.name')" fix prop="primaryDomain" min-width="120px">
-                        <template #default="{ row }">
-                            <Tooltip @click="openConfig(row.id)" :text="row.primaryDomain" />
+                    <el-table-column type="selection" width="32" />
+                    <el-table-column
+                        :label="$t('commons.table.name')"
+                        fix
+                        prop="primaryDomain"
+                        min-width="250px"
+                        sortable
+                        card-type="name"
+                    >
+                        <template #default="{ row, viewMode: columnViewMode }">
+                            <div v-if="columnViewMode === 'card'" class="website-card-domain">
+                                <el-text
+                                    type="primary"
+                                    class="website-card-domain__name cursor-pointer"
+                                    @click="openConfig(row.id)"
+                                >
+                                    {{ row.primaryDomain }}
+                                </el-text>
+                                <Domain
+                                    class="website-card-domain__actions"
+                                    :row="row"
+                                    :defaultHttpPort="appStatusRef?.getHttpPort?.() || 0"
+                                    :defaultHttpsPort="appStatusRef?.getHttpsPort?.() || 0"
+                                    :hide-name="true"
+                                    :show-favorite="true"
+                                    @favorite-change="favoriteWebsite"
+                                    @domain-edit="handleDomainEdit"
+                                />
+                            </div>
+                            <Domain
+                                v-else
+                                :row="row"
+                                :defaultHttpPort="appStatusRef?.getHttpPort?.() || 0"
+                                :defaultHttpsPort="appStatusRef?.getHttpsPort?.() || 0"
+                                @favorite-change="favoriteWebsite"
+                                @domain-edit="handleDomainEdit"
+                            />
                         </template>
                     </el-table-column>
-                    <el-table-column :label="$t('commons.table.type')" fix show-overflow-tooltip prop="type">
+                    <el-table-column
+                        width="180px"
+                        :label="$t('commons.table.type')"
+                        fix
+                        show-overflow-tooltip
+                        prop="type"
+                        sortable
+                        card-type="content"
+                    >
                         <template #default="{ row }">
-                            {{ $t('website.' + row.type) }}
-                            <span v-if="row.type === 'deployment'">[{{ row.appName }}]</span>
-                            <span v-if="row.type === 'runtime'">[{{ row.runtimeName }}]</span>
+                            <div v-if="row.type">
+                                {{ $t('website.' + row.type) }}
+                                <span v-if="row.type === 'deployment'">[{{ row.appName }}]</span>
+                                <span v-if="row.type === 'runtime'">[{{ row.runtimeName }}]</span>
+                                <span v-if="row.type === 'subsite'">[{{ row.parentSite }}]</span>
+                            </div>
                         </template>
                     </el-table-column>
-                    <el-table-column :label="$t('commons.table.status')" prop="status">
+                    <el-table-column :label="$t('website.sitePath')" prop="sitePath" width="90px" card-type="content">
                         <template #default="{ row }">
                             <el-button
-                                v-if="row.status === 'Running'"
+                                v-permission:view="'host_file_view'"
+                                type="primary"
                                 link
-                                type="success"
-                                :icon="VideoPlay"
-                                @click="opWebsite('stop', row.id)"
+                                @click="routerToFileWithPath(row.sitePath + '/index')"
                             >
-                                {{ $t('commons.status.running') }}
-                            </el-button>
-                            <el-button v-else link type="danger" :icon="VideoPause" @click="opWebsite('start', row.id)">
-                                {{ $t('commons.status.stopped') }}
+                                <el-icon>
+                                    <FolderOpened />
+                                </el-icon>
                             </el-button>
                         </template>
                     </el-table-column>
-                    <el-table-column :label="$t('website.remark')" fix prop="remark">
+                    <el-table-column
+                        :label="$t('commons.table.status')"
+                        prop="status"
+                        width="120px"
+                        sortable
+                        align="center"
+                        card-type="status"
+                    >
                         <template #default="{ row }">
-                            <MsgInfo :info="row.remark" width="120" />
+                            <span v-if="row.type === 'stream'">
+                                <el-text type="success">
+                                    {{ $t('commons.status.' + row.status.toLocaleLowerCase()) }}
+                                </el-text>
+                            </span>
+                            <span v-else>
+                                <Status
+                                    v-if="row.status === 'Running'"
+                                    v-permission
+                                    :operate="true"
+                                    :status="row.status"
+                                    @click="operateWebsite('stop', row)"
+                                />
+                                <Status
+                                    v-else
+                                    :status="row.status"
+                                    v-permission
+                                    :operate="true"
+                                    @click="operateWebsite('start', row)"
+                                />
+                            </span>
                         </template>
                     </el-table-column>
-                    <el-table-column :label="$t('website.protocol')" prop="protocol"></el-table-column>
-                    <el-table-column :label="$t('website.expireDate')">
-                        <template #default="{ row, $index }">
-                            <div v-show="row.showdate">
+
+                    <el-table-column
+                        :label="$t('commons.table.protocol')"
+                        prop="protocol"
+                        width="90px"
+                        card-type="content"
+                    ></el-table-column>
+                    <el-table-column
+                        :label="$t('website.expireDate')"
+                        prop="expireDate"
+                        :sortable="'custom'"
+                        width="150px"
+                        card-type="description"
+                    >
+                        <template #default="{ row }">
+                            <div v-if="row.showdate">
                                 <el-date-picker
-                                    style="width: 120px"
+                                    :key="row.id"
+                                    class="p-w-100"
                                     v-model="row.expireDate"
                                     type="date"
                                     :disabled-date="checkDate"
                                     :shortcuts="shortcuts"
                                     :clearable="false"
-                                    :default-value="setDate(row.expireDate)"
-                                    :ref="(el) => setdateRefs(el, $index)"
-                                    @change="submitDate(row)"
-                                    @visible-change="(visibility:boolean) => pickerVisibility(visibility, row)"
+                                    @change="updateWebsitConfig(row)"
+                                    :ref="(el) => setdateRefs(el)"
+                                    @visible-change="(visibility: boolean) => pickerVisibility(visibility, row)"
                                     size="small"
+                                    :mounted="initDatePicker(row)"
                                 ></el-date-picker>
                             </div>
-                            <div v-show="!row.showdate">
-                                <el-link type="primary" :underline="false" @click="openDatePicker(row, $index)">
+                            <div v-else>
+                                <el-link
+                                    v-permission
+                                    type="primary"
+                                    underline="never"
+                                    @click.stop="openDatePicker(row)"
+                                >
                                     <span v-if="isEver(row.expireDate)">
                                         {{ $t('website.neverExpire') }}
                                     </span>
@@ -130,63 +232,156 @@
                             </div>
                         </template>
                     </el-table-column>
+                    <el-table-column
+                        :label="$t('website.sslExpireDate')"
+                        prop="sslExpireDate"
+                        width="160px"
+                        card-type="description"
+                    >
+                        <template #default="{ row }">
+                            <el-tag v-if="row.protocol == 'HTTPS'" :type="row.sslStatus">
+                                {{ dateFormatSimple(row.sslExpireDate) }}
+                            </el-tag>
+                            <span v-else></span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column
+                        :label="$t('website.remark')"
+                        prop="remark"
+                        min-width="150px"
+                        card-type="description"
+                    >
+                        <template #default="{ row }">
+                            <fu-read-write-switch v-permission>
+                                <template #read>
+                                    <MsgInfo :info="row.remark" :width="'150'" />
+                                </template>
+                                <template #default="{ read }">
+                                    <el-input v-model="row.remark" @blur="updateRemark(row, read)" />
+                                </template>
+                            </fu-read-write-switch>
+                        </template>
+                    </el-table-column>
                     <fu-table-operations
-                        :ellipsis="10"
-                        width="260px"
+                        :ellipsis="1"
+                        width="180px"
                         :buttons="buttons"
                         :label="$t('commons.table.operate')"
-                        fixed="right"
+                        :fixed="isMobile ? false : 'right'"
                         fix
+                        card-type="button"
                     />
+                    <template #footerLeft="{ selected, toggleSelection }">
+                        <div class="footer-left-button" v-permission>
+                            <el-select class="p-w-200" v-model="batchReq.operate">
+                                <template #prefix>
+                                    <el-checkbox
+                                        :model-value="selected"
+                                        @click.stop
+                                        @change="toggleSelection"
+                                    ></el-checkbox>
+                                </template>
+                                <el-option
+                                    :label="$t('commons.button.start') + $t('menu.website')"
+                                    value="start"
+                                ></el-option>
+                                <el-option
+                                    :label="$t('commons.button.stop') + $t('menu.website')"
+                                    value="stop"
+                                ></el-option>
+                                <el-option
+                                    :label="$t('commons.button.delete') + $t('menu.website')"
+                                    value="delete"
+                                ></el-option>
+                                <el-option
+                                    :label="$t('commons.button.set') + $t('commons.table.group')"
+                                    value="group"
+                                ></el-option>
+                                <el-option
+                                    :label="$t('commons.button.set') + $t('website.ssl')"
+                                    value="setHttps"
+                                ></el-option>
+                            </el-select>
+                            <el-button
+                                type="primary"
+                                :disabled="selects.length == 0 || batchReq.operate == ''"
+                                @click="batchOp"
+                            >
+                                {{ $t('website.batchOperate') }}
+                                <span class="ml-1" v-if="selects.length > 0">({{ selects.length }})</span>
+                            </el-button>
+                        </div>
+                    </template>
                 </ComplexTable>
-                <el-card width="30%" v-if="nginxStatus != 'Running' && maskShow" class="mask-prompt">
-                    <span>{{ $t('commons.service.serviceNotStarted', ['OpenResty']) }}</span>
+                <el-card width="30%" v-if="disabledConfig && maskShow" class="mask-prompt">
+                    <span v-if="nginxIsExist">
+                        {{ $t('commons.service.serviceNotStarted', ['OpenResty']) }}
+                        <el-button type="primary" link @click="routerToFileWithPath(websiteDir)" icon="FolderOpened">
+                            {{ $t('website.toWebsiteDir') }}
+                        </el-button>
+                    </span>
+                    <span v-else>
+                        {{ $t('app.checkInstalledWarn', ['OpenResty']) }}
+                        <el-button @click="goRouter('openresty')" link icon="Position" type="primary">
+                            {{ $t('database.goInstall') }}
+                        </el-button>
+                    </span>
                 </el-card>
             </template>
         </LayoutContent>
-        <NginxConfig v-if="openNginxConfig" v-loading="loading" :containerName="containerName" :status="nginxStatus" />
         <CreateWebSite ref="createRef" @close="search" />
         <DeleteWebsite ref="deleteRef" @close="search" />
         <UploadDialog ref="uploadRef" />
         <Backups ref="dialogBackupRef" />
         <DefaultServer ref="defaultRef" />
         <GroupDialog @search="listGroup" ref="groupRef" />
+        <NginxConfig v-if="openNginxConfig" v-loading="loading" :containerName="containerName" :status="nginxStatus" />
+        <TaskLog ref="taskLogRef" @close="search" />
+        <OpDialog ref="opRef" @search="openTaskLog" />
+        <BatchSetGroup ref="batchSetGroupRef" @close="search" />
+        <BatchSetHttps ref="batchSetHttpsRef" @open-task="openTaskLog" />
     </div>
 </template>
 
 <script lang="ts" setup>
-import Tooltip from '@/components/tooltip/index.vue';
-import LayoutContent from '@/layout/layout-content.vue';
-import RouterButton from '@/components/router-button/index.vue';
 import Backups from '@/components/backup/index.vue';
 import UploadDialog from '@/components/upload/index.vue';
 import DefaultServer from '@/views/website/website/default/index.vue';
-import ComplexTable from '@/components/complex-table/index.vue';
-import { onMounted, reactive, ref } from '@vue/runtime-core';
-import CreateWebSite from './create/index.vue';
-import DeleteWebsite from './delete/index.vue';
-import GroupDialog from '@/components/group/index.vue';
-import { OpWebsite, SearchWebsites, UpdateWebsite } from '@/api/modules/website';
-import { Website } from '@/api/interface/website';
+import CreateWebSite from '@/views/website/website/create/index.vue';
+import DeleteWebsite from '@/views/website/website/delete/index.vue';
+import NginxConfig from '@/views/website/website/nginx/index.vue';
+import GroupDialog from '@/components/agent-group/index.vue';
 import AppStatus from '@/components/app-status/index.vue';
-import NginxConfig from './nginx/index.vue';
+import TaskLog from '@/components/log/task/index.vue';
+import Domain from '@/views/website/website/domain/index.vue';
+import BatchSetGroup from '@/views/website/website/batch-op/group.vue';
+import BatchSetHttps from '@/views/website/website/batch-op/https.vue';
+
 import i18n from '@/lang';
-import router from '@/routers';
+import { onMounted, reactive, ref, computed } from 'vue';
+import { batchOperate, opWebsite, searchWebsites, updateWebsite } from '@/api/modules/website';
+import { Website } from '@/api/interface/website';
 import { App } from '@/api/interface/app';
 import { ElMessageBox } from 'element-plus';
-import { dateFormatSimple } from '@/utils/util';
-import { MsgSuccess } from '@/utils/message';
+import { dateFormatSimple } from '@/utils/date';
+import { newUUID } from '@/utils/id';
+import { MsgError, MsgSuccess } from '@/utils/message';
 import { useI18n } from 'vue-i18n';
-import { VideoPlay, VideoPause } from '@element-plus/icons-vue';
-import MsgInfo from '@/components/msg-info/index.vue';
-import { GetGroupList } from '@/api/modules/group';
+import { getAgentGroupList } from '@/api/modules/group';
 import { Group } from '@/api/interface/group';
+import { getWebsiteTypes } from '@/global/mimetype';
+import { routerToFileWithPath, routerToNameWithParams, routerToNameWithQuery } from '@/utils/router';
+import { useGlobalStore } from '@/composables/useGlobalStore';
+import { useOperateNodeContext } from '@/composables/useOperateNodeContext';
+import { usePageState } from '@/composables/usePageState';
 
+const { currentNode, isMobile } = useGlobalStore();
+useOperateNodeContext(currentNode);
 const shortcuts = [
     {
         text: useI18n().t('website.ever'),
         value: () => {
-            return new Date('1970-01-01');
+            return new Date('2006-01-02');
         },
     },
     {
@@ -198,9 +393,10 @@ const shortcuts = [
         },
     },
 ];
-
+const WebsiteTypes = getWebsiteTypes();
 const loading = ref(false);
-const maskShow = ref(true);
+const viewMode = ref<'table' | 'card'>('table');
+const maskShow = ref(false);
 const createRef = ref();
 const deleteRef = ref();
 const groupRef = ref();
@@ -208,31 +404,100 @@ const openNginxConfig = ref(false);
 const nginxIsExist = ref(false);
 const containerName = ref('');
 const nginxStatus = ref('');
-const installPath = ref('');
 const uploadRef = ref();
 const dialogBackupRef = ref();
 const defaultRef = ref();
 const data = ref();
-let dateRefs: Map<number, any> = new Map();
 let groups = ref<Group.GroupInfo[]>([]);
+const dataRef = ref();
+const columns = ref([]);
+const websiteDir = ref();
+const selects = ref([]);
+const batchReq = reactive({
+    operate: '',
+    ids: [] as number[],
+    taskID: '',
+});
+const taskLogRef = ref();
+const opRef = ref();
+const batchSetGroupRef = ref();
+const batchSetHttpsRef = ref();
+const nginxVersion = ref();
+const appStatusRef = ref();
 
-const paginationConfig = reactive({
-    currentPage: 1,
-    pageSize: 10,
-    total: 0,
+const pageState = usePageState(() => ({
+    paginationConfig: {
+        cacheSizeKey: 'website-page-size',
+        currentPage: 1,
+        pageSize: Number(localStorage.getItem('website-page-size')) || 20,
+        total: 0,
+    },
+    req: {
+        name: '',
+        page: 1,
+        pageSize: 10,
+        orderBy: 'favorite',
+        order: 'descending',
+        websiteGroupId: 0,
+        type: '',
+    },
+    tableSort: {
+        prop: '',
+        order: null as 'ascending' | 'descending' | null,
+    },
+}));
+const paginationConfig = pageState.paginationConfig;
+const req = pageState.req;
+const tableSort = pageState.tableSort;
+
+const goRouter = async (key: string) => {
+    routerToNameWithQuery('AppAll', { install: key });
+};
+
+const favoriteWebsite = (row: Website.Website) => {
+    row.favorite = !row.favorite;
+    updateWebsitConfig(row);
+};
+
+const handleDomainEdit = (row: Website.Website, domain: string) => {
+    row.primaryDomain = domain;
+    updateWebsitConfig(row);
+};
+
+const disabledConfig = computed(() => {
+    return nginxStatus.value != 'Running';
 });
-let req = reactive({
-    name: '',
-    page: 1,
-    pageSize: 10,
-    websiteGroupId: 0,
-});
+
+const changeSort = ({ prop, order }) => {
+    tableSort.prop = prop || '';
+    tableSort.order = order || null;
+    if (order) {
+        switch (prop) {
+            case 'primaryDomain':
+                prop = 'primary_domain';
+                break;
+            case 'expireDate':
+                prop = 'expire_date';
+                break;
+            default:
+                break;
+        }
+        req.orderBy = prop;
+        req.order = order;
+    } else {
+        req.orderBy = 'favorite';
+        req.order = 'descending';
+    }
+    search();
+};
 
 const search = async () => {
     req.page = paginationConfig.currentPage;
     req.pageSize = paginationConfig.pageSize;
+
     loading.value = true;
-    await SearchWebsites(req)
+    data.value = [];
+    await searchWebsites(req)
         .then((res) => {
             data.value = res.data.items;
             paginationConfig.total = res.data.total;
@@ -242,9 +507,16 @@ const search = async () => {
         });
 };
 
-const listGroup = async () => {
-    const res = await GetGroupList({ type: 'website' });
+const listGroup = async (searchOnReset = true) => {
+    const res = await getAgentGroupList('website');
     groups.value = res.data;
+    if (req.websiteGroupId !== 0 && !groups.value.some((group) => group.id === req.websiteGroupId)) {
+        req.websiteGroupId = 0;
+        paginationConfig.currentPage = 1;
+        if (searchOnReset) {
+            search();
+        }
+    }
 };
 
 const setting = () => {
@@ -252,67 +524,88 @@ const setting = () => {
 };
 
 const openConfig = (id: number) => {
-    router.push({ name: 'WebsiteConfig', params: { id: id, tab: 'basic' } });
+    routerToNameWithParams('WebsiteConfig', { id: id, tab: 'basic' });
 };
 
 const isEver = (time: string) => {
     const expireDate = new Date(time);
-    return expireDate < new Date('1970-01-02');
+    return expireDate > new Date('9999-12-30');
 };
 
 const isBeforeNow = (time: string) => {
     return new Date() > new Date(time);
 };
 
-const setDate = (time: string) => {
-    if (isEver(time)) {
-        return new Date();
-    } else {
-        return new Date(time);
-    }
-};
-
-const openDatePicker = (row: any, index: number) => {
-    row.showdate = true;
-    const ref = dateRefs.get(index);
-    if (ref != undefined) {
-        if (isBeforeNow(row.expireDate)) {
-            row.oldExpireDate = row.expireDate;
-            const date = new Date().toLocaleDateString();
-            row.expireDate = date;
+const refreshData = () => {
+    for (let i = 0; i < data.value.length; i++) {
+        if (data.value[i].showdate) {
+            data.value[i].showdate = false;
+            if (data.value[i].oldExpireDate) {
+                data.value[i].expireDate = data.value[i].oldExpireDate;
+                data.value[i].oldExpireDate = undefined;
+            }
         }
-        ref.handleOpen();
+    }
+    if (dataRef.value) {
+        dataRef.value.handleClose();
+        dataRef.value = undefined;
     }
 };
 
-const setdateRefs = (ref: any, index: number) => {
-    dateRefs.set(index, ref);
+const openDatePicker = (row: any) => {
+    if (row.type === 'stream') {
+        return;
+    }
+    refreshData();
+    row.showdate = true;
+};
+
+const setdateRefs = (ref: any) => {
+    dataRef.value = ref;
+    if (dataRef.value != undefined) {
+        dataRef.value.handleOpen();
+    }
+};
+
+const initDatePicker = (row: any) => {
+    if (
+        (dataRef.value == undefined && row.oldExpireDate == undefined && isBeforeNow(row.expireDate)) ||
+        isEver(row.expireDate)
+    ) {
+        row.oldExpireDate = row.expireDate;
+        const date = new Date().toLocaleDateString();
+        row.expireDate = date;
+        return;
+    }
 };
 
 const pickerVisibility = (visibility: boolean, row: any) => {
     if (!visibility) {
-        row.showdate = false;
-        if (!row.change) {
-            if (row.oldExpireDate) {
-                row.expireDate = row.oldExpireDate;
-            }
-            row.change = false;
+        dataRef.value = undefined;
+        if (row.oldExpireDate) {
+            row.expireDate = row.oldExpireDate;
+            row.oldExpireDate = undefined;
         }
+        row.showdate = false;
     }
 };
 
-const submitDate = (row: any) => {
-    const reqDate = dateFormatSimple(row.expireDate);
+const updateWebsitConfig = (row: any) => {
+    let reqDate = dateFormatSimple(row.expireDate);
+    if (reqDate == '2006-01-02') {
+        reqDate = '9999-12-31';
+    }
     const req = {
         id: row.id,
         primaryDomain: row.primaryDomain,
         remark: row.remark,
         webSiteGroupId: row.webSiteGroupId,
         expireDate: reqDate,
+        IPV6: row.IPV6,
+        favorite: row.favorite,
     };
 
-    UpdateWebsite(req).then(() => {
-        row.change = true;
+    updateWebsite(req).then(() => {
         MsgSuccess(i18n.global.t('commons.msg.updateSuccess'));
         search();
     });
@@ -320,35 +613,39 @@ const submitDate = (row: any) => {
 
 const buttons = [
     {
-        label: i18n.global.t('website.config'),
+        label: i18n.global.t('menu.config'),
+        permission: true,
         click: function (row: Website.Website) {
             openConfig(row.id);
         },
     },
     {
         label: i18n.global.t('database.backupList'),
+        permission: true,
         click: (row: Website.Website) => {
             let params = {
                 type: 'website',
-                name: row.primaryDomain,
-                detailName: '',
+                name: row.alias,
+                detailName: row.alias,
             };
             dialogBackupRef.value!.acceptParams(params);
         },
     },
     {
         label: i18n.global.t('database.loadBackup'),
+        permission: true,
         click: (row: Website.Website) => {
             let params = {
                 type: 'website',
                 name: row.primaryDomain,
-                detailName: '',
+                detailName: row.alias,
             };
             uploadRef.value!.acceptParams(params);
         },
     },
     {
-        label: i18n.global.t('app.delete'),
+        label: i18n.global.t('commons.button.delete'),
+        permission: true,
         click: function (row: Website.Website) {
             openDelete(row);
         },
@@ -360,7 +657,7 @@ const openDelete = (website: Website.Website) => {
 };
 
 const openCreate = () => {
-    createRef.value.acceptParams(installPath.value);
+    createRef.value.acceptParams(nginxVersion.value);
 };
 
 const openGroup = () => {
@@ -375,7 +672,8 @@ const checkExist = (data: App.CheckInstalled) => {
     nginxIsExist.value = data.isExist;
     containerName.value = data.containerName;
     nginxStatus.value = data.status;
-    installPath.value = data.installPath;
+    websiteDir.value = data.websiteDir;
+    nginxVersion.value = data.version;
 };
 
 const checkDate = (date: Date) => {
@@ -383,25 +681,100 @@ const checkDate = (date: Date) => {
     return date.getTime() < now.getTime();
 };
 
-const opWebsite = (op: string, id: number) => {
+const operateWebsite = (op: string, row: Website.Website) => {
+    if (row.type === 'stream') {
+        return;
+    }
     ElMessageBox.confirm(i18n.global.t('website.' + op + 'Helper'), i18n.global.t('cronjob.changeStatus'), {
         confirmButtonText: i18n.global.t('commons.button.confirm'),
         cancelButtonText: i18n.global.t('commons.button.cancel'),
     }).then(async () => {
-        await OpWebsite({ id: id, operate: op });
+        await opWebsite({ id: row.id, operate: op });
         MsgSuccess(i18n.global.t('commons.msg.operationSuccess'));
         search();
     });
 };
 
-onMounted(() => {
+const updateRemark = (row: Website.Website, bulr: Function) => {
+    bulr();
+    if (row.remark && row.remark.length > 128) {
+        MsgError(i18n.global.t('commons.rule.length128Err'));
+        return;
+    }
+    updateWebsitConfig(row);
+};
+
+const openTaskLog = () => {
+    selects.value = [];
+    batchReq.operate = '';
+    taskLogRef.value.openWithTaskID(batchReq.taskID);
+};
+
+const batchOp = () => {
+    switch (batchReq.operate) {
+        case 'setHttps':
+            const tID = newUUID();
+            batchReq.taskID = tID;
+            batchSetHttpsRef.value.acceptParams(
+                selects.value.map((item) => item.id),
+                tID,
+            );
+            break;
+        case 'group':
+            batchSetGroupRef.value.acceptParams(selects.value.map((item) => item.id));
+            break;
+        default:
+            const names = selects.value.map((item) => item.primaryDomain);
+            batchReq.ids = selects.value.map((item) => item.id);
+            const taskID = newUUID();
+            batchReq.taskID = taskID;
+            opRef.value.acceptParams({
+                names: names,
+                title: i18n.global.t('website.batchOperate'),
+                api: batchOperate,
+                msg: i18n.global.t('website.batchOperateHelper', [i18n.global.t('commons.button.' + batchReq.operate)]),
+                params: batchReq,
+                noMsg: true,
+            });
+            return;
+    }
+};
+
+onMounted(async () => {
+    try {
+        await listGroup(false);
+    } catch {
+        // The request interceptor already reports the error; website loading should continue.
+    }
     search();
-    listGroup();
 });
 </script>
-<style lang="scss" scoped>
-.search-button {
-    float: right;
-    display: inline;
+
+<style scoped>
+.website-card-domain {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.website-card-domain__name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+:deep(.website-card-domain__actions) {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    z-index: 1;
+    width: auto;
+}
+
+:deep(.website-card-domain__actions > div:last-child) {
+    display: flex;
+    align-items: center;
 }
 </style>

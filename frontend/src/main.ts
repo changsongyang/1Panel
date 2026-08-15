@@ -1,32 +1,47 @@
 import { createApp } from 'vue';
 import App from './App.vue';
 
+import ElementPlus from 'element-plus';
+import 'element-plus/dist/index.css';
+import * as Icons from '@element-plus/icons-vue';
+
 import '@/styles/index.scss';
 import '@/styles/common.scss';
 import '@/assets/iconfont/iconfont.css';
 import '@/assets/iconfont/iconfont.js';
+import '@/styles/style.css';
+import { loadXpackStyles } from '@/extensions/theme';
 
-import directives from '@/directives/index';
+loadXpackStyles();
+
 import router from '@/routers/index';
-import I18n from '@/lang/index';
+import i18n, { ensureFallbackLocale, loadLocaleMessages } from '@/lang/index';
 import pinia from '@/store/index';
 import SvgIcon from './components/svg-icon/svg-icon.vue';
+import Components from '@/components';
 
-import ElementPlus from 'element-plus';
-import Fit2CloudPlus from 'fit2cloud-ui-plus';
-import * as Icons from '@element-plus/icons-vue';
-const app = createApp(App);
-app.component('SvgIcon', SvgIcon);
-app.use(ElementPlus);
+import directives from '@/directives/index';
 
-app.use(Fit2CloudPlus, { locale: I18n.global.messages.value[localStorage.getItem('lang') || 'zh'] });
+const bootstrap = async () => {
+    const currentLocale = i18n.global.locale.value;
 
-Object.keys(Icons).forEach((key) => {
-    app.component(key, Icons[key as keyof typeof Icons]);
-});
+    await Promise.all([loadLocaleMessages(currentLocale), ensureFallbackLocale()]);
 
-app.use(router);
-app.use(I18n);
-app.use(pinia);
-app.use(directives);
-app.mount('#app');
+    const app = createApp(App);
+    app.component('SvgIcon', SvgIcon);
+    app.use(ElementPlus);
+
+    Object.keys(Icons).forEach((key) => {
+        app.component(key, Icons[key as keyof typeof Icons]);
+    });
+
+    app.use(pinia);
+    app.use(router);
+    app.use(i18n);
+    app.use(Components);
+    app.use(directives);
+
+    app.mount('#app');
+};
+
+bootstrap();

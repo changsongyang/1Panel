@@ -1,103 +1,169 @@
 <template>
     <div>
-        <el-drawer v-model="upVisiable" :destroy-on-close="true" :close-on-click-modal="false" size="50%">
-            <template #header>
-                <DrawerHeader :header="$t('commons.button.import')" :resource="title" :back="handleClose" />
-            </template>
-            <div v-loading="loading">
-                <el-upload ref="uploadRef" drag :on-change="fileOnChange" class="upload-demo" :auto-upload="false">
-                    <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-                    <div class="el-upload__text">
-                        {{ $t('database.dropHelper') }}
-                        <em>{{ $t('database.clickHelper') }}</em>
+        <DrawerPro
+            v-model="uploadOpen"
+            :header="$t('commons.button.import')"
+            :resource="title"
+            @close="handleUploadClose"
+            size="large"
+        >
+            <template #content>
+                <div v-loading="loading">
+                    <div v-if="type !== 'mongodb'">
+                        <el-alert :closable="false" type="warning">
+                            <template #default>
+                                <ul>
+                                    <li v-if="type === 'mysql' || type === 'mariadb' || type === 'mysql-cluster'">
+                                        {{ $t('database.formatHelper', [remark]) }}
+                                    </li>
+                                    <li v-if="isDb() && type !== 'mongodb'">{{ $t('database.supportUpType') }}</li>
+                                    <li v-if="type === 'website' || type === 'app'">
+                                        {{ $t('website.websiteBackupWarn') }}
+                                    </li>
+                                    <li v-if="type === 'container'">{{ $t('container.importContainerBackupTip') }}</li>
+                                    <li v-else-if="type === 'compose'">{{ $t('container.importComposeBackupTip') }}</li>
+                                    <li v-else-if="!isDb()">{{ $t('website.supportUpType', [type]) }}</li>
+                                </ul>
+                            </template>
+                        </el-alert>
                     </div>
-                    <template #tip>
-                        <el-progress
-                            v-if="isUpload"
-                            text-inside
-                            :stroke-width="12"
-                            :percentage="uploadPrecent"
-                        ></el-progress>
-                        <div v-if="type === 'mysql'" class="el-upload__tip">
-                            <span class="input-help">{{ $t('database.supportUpType') }}</span>
-                            <span class="input-help">
-                                {{ $t('database.zipFormat') }}
-                            </span>
-                        </div>
-                        <div v-else class="el-upload__tip">
-                            <span class="input-help">{{ $t('website.supportUpType') }}</span>
-                            <span class="input-help">
-                                {{ $t('website.zipFormat', [type + '.json']) }}
-                            </span>
-                        </div>
-                    </template>
-                </el-upload>
-                <el-button :disabled="isUpload" v-if="uploaderFiles.length === 1" icon="Upload" @click="onSubmit">
-                    {{ $t('commons.button.upload') }}
-                </el-button>
 
-                <el-divider />
-                <ComplexTable
-                    :pagination-config="paginationConfig"
-                    @search="search"
-                    v-model:selects="selects"
-                    :data="data"
-                >
-                    <template #toolbar>
-                        <el-button
-                            style="margin-left: 10px"
-                            plain
-                            :disabled="selects.length === 0"
-                            @click="onBatchDelete(null)"
+                    <ComplexTable
+                        :pagination-config="paginationConfig"
+                        class="mt-5"
+                        @search="search"
+                        v-model:selects="selects"
+                        :data="data"
+                    >
+                        <template #toolbar>
+                            <el-upload
+                                :limit="1"
+                                class="float-left"
+                                ref="uploadRef"
+                                :accept="uploadAccept"
+                                :show-file-list="false"
+                                :on-exceed="handleExceed"
+                                :on-change="fileOnChange"
+                                :auto-upload="false"
+                            >
+                                <el-button class="float-left">
+                                    {{ $t('database.localUpload') }}
+                                </el-button>
+                            </el-upload>
+                            <el-button class="float-left ml-3" @click="fileRef.acceptParams({ dir: false })">
+                                {{ $t('database.hostSelect') }}
+                            </el-button>
+                            <el-button :disabled="selects.length === 0" @click="onBatchDelete(null)">
+                                {{ $t('commons.button.delete') }}
+                            </el-button>
+
+                            <el-progress v-if="isUpload" text-inside :stroke-width="12" :percentage="uploadPercent" />
+                        </template>
+                        <el-table-column type="selection" fix />
+                        <el-table-column :label="$t('commons.table.name')" show-overflow-tooltip prop="name" />
+                        <el-table-column :label="$t('file.size')" prop="size">
+                            <template #default="{ row }">
+                                {{ computeSize(row.size) }}
+                            </template>
+                        </el-table-column>
+                        <el-table-column
+                            show-overflow-tooltip
+                            :label="$t('commons.table.createdAt')"
+                            min-width="90"
+                            fix
                         >
-                            {{ $t('commons.button.delete') }}
-                        </el-button>
-                    </template>
-                    <el-table-column type="selection" fix />
-                    <el-table-column :label="$t('commons.table.name')" show-overflow-tooltip prop="name" />
-                    <el-table-column :label="$t('file.size')" prop="size">
-                        <template #default="{ row }">
-                            {{ computeSize(row.size) }}
+                            <template #default="{ row }">
+                                {{ row.createdAt }}
+                            </template>
+                        </el-table-column>
+                        <fu-table-operations
+                            width="150px"
+                            :buttons="buttons"
+                            :ellipsis="10"
+                            :label="$t('commons.table.operate')"
+                            fix
+                        />
+                    </ComplexTable>
+                </div>
+            </template>
+        </DrawerPro>
+
+        <DialogPro
+            v-model="recoverDialog"
+            :title="title ? $t('commons.button.recover') + ' - ' + title : $t('commons.button.recover')"
+            @close="handleRecoverClose"
+            size="small"
+        >
+            <el-form ref="backupForm" @submit.prevent label-position="top" v-loading="loading">
+                <el-form-item :label="$t('setting.compressPassword')">
+                    <el-input v-model="secret" :placeholder="$t('setting.backupRecoverMessage')" />
+                </el-form-item>
+                <el-form-item
+                    v-if="type !== 'app' && type !== 'website'"
+                    :label="$t('cronjob.timeout')"
+                    prop="timeoutItem"
+                >
+                    <el-input type="number" class="selectClass" v-model.number="timeoutItem">
+                        <template #append>
+                            <el-select v-model="timeoutUnit" style="width: 80px">
+                                <el-option :label="$t('commons.units.second')" value="s" />
+                                <el-option :label="$t('commons.units.minute')" value="m" />
+                                <el-option :label="$t('commons.units.hour')" value="h" />
+                            </el-select>
                         </template>
-                    </el-table-column>
-                    <el-table-column :label="$t('commons.table.createdAt')" min-width="80" fix>
-                        <template #default="{ row }">
-                            {{ row.createdAt }}
-                        </template>
-                    </el-table-column>
-                    <fu-table-operations
-                        width="300px"
-                        :buttons="buttons"
-                        :ellipsis="10"
-                        :label="$t('commons.table.operate')"
-                        fix
-                    />
-                </ComplexTable>
-            </div>
-        </el-drawer>
+                    </el-input>
+                    <span class="input-help">{{ $t('database.recoverTimeoutHelper') }}</span>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="handleRecoverClose" :disabled="loading">
+                        {{ $t('commons.button.cancel') }}
+                    </el-button>
+                    <el-button type="primary" @click="onHandleRecover" :disabled="loading">
+                        {{ $t('commons.button.confirm') }}
+                    </el-button>
+                </span>
+            </template>
+        </DialogPro>
+
+        <OpDialog ref="opRef" @search="search" />
+        <FileList ref="fileRef" @choose="loadFile" />
+        <TaskLog ref="taskLogRef" @close="handleTaskLogClose" />
     </div>
 </template>
 
 <script lang="ts" setup>
-import ComplexTable from '@/components/complex-table/index.vue';
-import { reactive, ref } from 'vue';
-import { computeSize } from '@/utils/util';
-import { useDeleteData } from '@/hooks/use-delete-data';
-import { handleRecoverByUpload } from '@/api/modules/setting';
+import { computed, reactive, ref } from 'vue';
+import { computeSize } from '@/utils/size';
+import { newUUID } from '@/utils/id';
+import { transferTimeToSecond } from '@/utils/validate';
 import i18n from '@/lang';
-import { UploadFile, UploadFiles, UploadInstance } from 'element-plus';
+import { UploadFile, UploadFiles, UploadInstance, UploadProps, UploadRawFile, genFileId } from 'element-plus';
 import { File } from '@/api/interface/file';
-import DrawerHeader from '@/components/drawer-header/index.vue';
-import { BatchDeleteFile, CheckFile, ChunkUploadFileData, GetUploadList } from '@/api/modules/files';
+import { batchDeleteFile, checkFile, chunkUploadFileData, getUploadList } from '@/api/modules/files';
 import { loadBaseDir } from '@/api/modules/setting';
 import { MsgError, MsgSuccess } from '@/utils/message';
+import { handleRecoverByUpload, uploadByRecover } from '@/api/modules/backup';
+import TaskLog from '@/components/log/task/index.vue';
 
+const emit = defineEmits(['close']);
+
+interface DialogProps {
+    type: string;
+    name: string;
+    detailName: string;
+    remark: string;
+    node?: string;
+}
 const loading = ref();
+const fileRef = ref();
 const isUpload = ref();
-const uploadPrecent = ref<number>(0);
+const uploadPercent = ref<number>(0);
 const selects = ref<any>([]);
 const baseDir = ref();
-
+const opRef = ref();
+const currentRow = ref();
 const data = ref();
 const title = ref();
 const paginationConfig = reactive({
@@ -105,34 +171,67 @@ const paginationConfig = reactive({
     pageSize: 10,
     total: 0,
 });
-
-const upVisiable = ref(false);
-const type = ref();
+const uploadOpen = ref(false);
+const type = ref('mysql');
 const name = ref();
 const detailName = ref();
-interface DialogProps {
-    type: string;
-    name: string;
-    detailName: string;
-}
+const remark = ref();
+const secret = ref();
+const timeoutItem = ref(30);
+const timeoutUnit = ref('m');
+const taskLogRef = ref();
+const node = ref();
+
+const recoverDialog = ref();
+
 const acceptParams = async (params: DialogProps): Promise<void> => {
     type.value = params.type;
     name.value = params.name;
     detailName.value = params.detailName;
+    remark.value = params.remark;
+    node.value = params.node;
 
-    const pathRes = await loadBaseDir();
-    if (type.value === 'mysql') {
-        title.value = name.value + ' [ ' + detailName.value + ' ]';
+    const pathRes = await loadBaseDir(node.value);
+    switch (type.value) {
+        case 'mysql':
+        case 'mariadb':
+        case 'postgresql':
+        case 'mysql-cluster':
+        case 'postgresql-cluster':
+        case 'mongodb':
+            title.value = name.value + ' [ ' + detailName.value + ' ]';
+            if (detailName.value) {
+                baseDir.value = `${pathRes.data}/uploads/database/${type.value}/${name.value}/${detailName.value}/`;
+            } else {
+                baseDir.value = `${pathRes.data}/uploads/database/${type.value}/${name.value}/`;
+            }
+            break;
+        case 'website':
+            title.value = name.value;
+            baseDir.value = `${pathRes.data}/uploads/website/${type.value}/${detailName.value}/`;
+            break;
+        case 'app':
+            title.value = name.value;
+            baseDir.value = `${pathRes.data}/uploads/app/${type.value}/${name.value}/`;
+            break;
+        case 'container':
+            title.value = name.value || i18n.global.t('menu.container');
+            if (name.value) {
+                baseDir.value = `${pathRes.data}/uploads/container/${name.value}/`;
+            } else {
+                baseDir.value = `${pathRes.data}/uploads/container/import/`;
+            }
+            break;
+        case 'compose':
+            title.value = name.value || i18n.global.t('container.compose');
+            if (name.value) {
+                baseDir.value = `${pathRes.data}/uploads/compose/${name.value}/`;
+            } else {
+                baseDir.value = `${pathRes.data}/uploads/compose/import/`;
+            }
+            break;
     }
-    if (type.value === 'website' || type.value === 'app') {
-        title.value = name.value;
-    }
-    if (detailName.value) {
-        baseDir.value = `${pathRes.data}/uploads/${type.value}/${name.value}/${detailName.value}/`;
-    } else {
-        baseDir.value = `${pathRes.data}/uploads/${type.value}/${name.value}/`;
-    }
-    upVisiable.value = true;
+    uploadOpen.value = true;
     search();
 };
 
@@ -142,58 +241,126 @@ const search = async () => {
         pageSize: paginationConfig.pageSize,
         path: baseDir.value,
     };
-    const res = await GetUploadList(params);
+    const res = await getUploadList(params);
     data.value = res.data.items || [];
     paginationConfig.total = res.data.total;
 };
 
-const onRecover = async (row: File.File) => {
+const beforeUpload = (fileName: string) => {
+    const itemName = fileName.toLowerCase();
+    let reg = /^[a-zA-Z0-9\u4e00-\u9fa5]{1}[a-z:A-Z0-9_.\u4e00-\u9fa5-]{0,256}$/;
+    if (!reg.test(itemName)) {
+        MsgError(i18n.global.t('commons.msg.fileNameErr'));
+        return false;
+    }
+    if (isDb()) {
+        const allowedExtensions = type.value === 'mongodb' ? ['.gz'] : ['.sql', '.sql.gz', '.tar.gz', '.zip'];
+        const isValidFile = allowedExtensions.some((ext) => itemName.endsWith(ext));
+        if (!isValidFile) {
+            MsgError(
+                type.value === 'mongodb'
+                    ? i18n.global.t('commons.msg.unSupportType')
+                    : i18n.global.t('database.supportUpType'),
+            );
+            return false;
+        }
+        return true;
+    }
+    const allowedExtensions = ['.tar.gz'];
+    const isValidFile = allowedExtensions.some((ext) => itemName.endsWith(ext));
+    if (!isValidFile) {
+        if (type.value === 'compose') {
+            MsgError(i18n.global.t('container.importComposeBackupTip'));
+            return false;
+        }
+        if (type.value === 'container') {
+            MsgError(i18n.global.t('container.importContainerBackupTip'));
+            return false;
+        }
+        MsgError(i18n.global.t('website.supportUpType'));
+        return false;
+    }
+    return true;
+};
+
+const loadFile = async (path: string) => {
+    let filaName = path.split('/').pop();
+    if (!filaName) {
+        MsgError(i18n.global.t('commons.msg.fileNameErr'));
+        return;
+    }
+    if (!beforeUpload(filaName)) {
+        return;
+    }
+    ElMessageBox.confirm(i18n.global.t('database.selectHelper', [path]), i18n.global.t('database.loadBackup'), {
+        confirmButtonText: i18n.global.t('commons.button.confirm'),
+        cancelButtonText: i18n.global.t('commons.button.cancel'),
+    }).then(async () => {
+        uploadByRecover(path, baseDir.value, node.value)
+            .then(() => {
+                MsgSuccess(i18n.global.t('commons.msg.operationSuccess'));
+                search();
+            })
+            .finally(() => {
+                loading.value = false;
+            });
+    });
+};
+
+const openTaskLog = (taskID: string) => {
+    taskLogRef.value.openWithTaskID(taskID, true, node.value);
+};
+
+const onHandleRecover = async () => {
     let params = {
+        downloadAccountID: 1,
         type: type.value,
         name: name.value,
         detailName: detailName.value,
-        file: baseDir.value + row.name,
+        file: baseDir.value + currentRow.value.name,
+        secret: secret.value,
+        taskID: newUUID(),
+        timeout: timeoutItem.value === -1 ? -1 : transferTimeToSecond(timeoutItem.value + timeoutUnit.value),
     };
     loading.value = true;
-    await handleRecoverByUpload(params)
+    await handleRecoverByUpload(params, node.value)
         .then(() => {
             loading.value = false;
+            handleUploadClose();
+            handleRecoverClose();
             MsgSuccess(i18n.global.t('commons.msg.operationSuccess'));
+            search();
+            openTaskLog(params.taskID);
         })
         .catch(() => {
             loading.value = false;
         });
 };
 
+const onRecover = async (row: File.File) => {
+    currentRow.value = row;
+    secret.value = '';
+    recoverDialog.value = true;
+};
+
+const isDb = () => {
+    return (
+        type.value === 'mongodb' ||
+        type.value === 'mysql' ||
+        type.value === 'mariadb' ||
+        type.value === 'postgresql' ||
+        type.value === 'mysql-cluster' ||
+        type.value === 'postgresql-cluster'
+    );
+};
+const uploadAccept = computed(() => {
+    return type.value === 'mongodb' ? '.gz' : '.tar.gz,.sql,.gz,.zip';
+});
 const uploaderFiles = ref<UploadFiles>([]);
 const uploadRef = ref<UploadInstance>();
 
-const beforeAvatarUpload = (rawFile) => {
-    if (type.value === 'app' || type.value === 'website') {
-        if (!rawFile.name.endsWith('.tar.gz')) {
-            MsgError(i18n.global.t('commons.msg.unSupportType'));
-            return false;
-        }
-        return true;
-    }
-    if (!rawFile.name.endsWith('.sql') && !rawFile.name.endsWith('.tar.gz') && !rawFile.name.endsWith('.sql.gz')) {
-        MsgError(i18n.global.t('commons.msg.unSupportType'));
-        return false;
-    }
-    return true;
-};
-
 const fileOnChange = (_uploadFile: UploadFile, uploadFiles: UploadFiles) => {
     uploaderFiles.value = uploadFiles;
-};
-
-const handleClose = () => {
-    uploaderFiles.value = [];
-    uploadRef.value!.clearFiles();
-    upVisiable.value = false;
-};
-
-const onSubmit = async () => {
     if (uploaderFiles.value.length !== 1) {
         return;
     }
@@ -202,18 +369,52 @@ const onSubmit = async () => {
         MsgError(i18n.global.t('commons.msg.fileNameErr'));
         return;
     }
+    if (!beforeUpload(file.raw.name)) {
+        return;
+    }
+    ElMessageBox.confirm(
+        i18n.global.t('database.selectHelper', [file.raw.name]),
+        i18n.global.t('database.loadBackup'),
+        {
+            confirmButtonText: i18n.global.t('commons.button.confirm'),
+            cancelButtonText: i18n.global.t('commons.button.cancel'),
+        },
+    ).then(async () => {
+        onSubmit();
+    });
+};
+
+const handleUploadClose = () => {
+    uploaderFiles.value = [];
+    uploadRef.value!.clearFiles();
+    uploadOpen.value = false;
+    emit('close');
+};
+const handleTaskLogClose = () => {
+    emit('close');
+};
+
+const handleRecoverClose = () => {
+    recoverDialog.value = false;
+};
+
+const handleExceed: UploadProps['onExceed'] = (files) => {
+    uploadRef.value!.clearFiles();
+    const file = files[0] as UploadRawFile;
+    file.uid = genFileId();
+    uploadRef.value!.handleStart(file);
+};
+
+const onSubmit = async () => {
+    const file = uploaderFiles.value[0];
     let reg = /^[a-zA-Z0-9\u4e00-\u9fa5]{1}[a-z:A-Z0-9_.\u4e00-\u9fa5-]{0,256}$/;
     if (!reg.test(file.raw.name)) {
         MsgError(i18n.global.t('commons.msg.fileNameErr'));
         return;
     }
-    const res = await CheckFile(baseDir.value + file.raw.name);
-    if (!res.data) {
+    const res = await checkFile(baseDir.value + file.raw.name, false);
+    if (res.data) {
         MsgError(i18n.global.t('commons.msg.fileExist'));
-        return;
-    }
-    let isOk = beforeAvatarUpload(file.raw);
-    if (!isOk) {
         return;
     }
     submitUpload(file);
@@ -240,12 +441,12 @@ const submitUpload = async (file: any) => {
         formData.append('chunkCount', chunkCount.toString());
 
         try {
-            await ChunkUploadFileData(formData, {
+            await chunkUploadFileData(formData, {
                 onUploadProgress: (progressEvent) => {
                     const progress = Math.round(
                         ((uploadedChunkCount + progressEvent.loaded / progressEvent.total) * 100) / chunkCount,
                     );
-                    uploadPrecent.value = progress;
+                    uploadPercent.value = progress;
                 },
             });
             uploadedChunkCount++;
@@ -265,15 +466,26 @@ const submitUpload = async (file: any) => {
 
 const onBatchDelete = async (row: File.File | null) => {
     let files: Array<string> = [];
+    let names: Array<string> = [];
     if (row) {
         files.push(baseDir.value + row.name);
+        names.push(row.name);
     } else {
         selects.value.forEach((item: File.File) => {
             files.push(baseDir.value + item.name);
+            names.push(item.name);
         });
     }
-    await useDeleteData(BatchDeleteFile, { paths: files, isDir: false }, 'commons.msg.delete');
-    search();
+    opRef.value.acceptParams({
+        title: i18n.global.t('commons.button.delete'),
+        names: names,
+        msg: i18n.global.t('commons.msg.operatorHelper', [
+            i18n.global.t('commons.button.import'),
+            i18n.global.t('commons.button.delete'),
+        ]),
+        api: batchDeleteFile,
+        params: { paths: files, isDir: false },
+    });
 };
 
 const buttons = [
